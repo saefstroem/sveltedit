@@ -8,6 +8,7 @@ export interface Claim {
   column: number;
   tag: string;
   html: string | null;
+  original: string;
 }
 
 export type Post = (path: string, body: string) => Promise<{ status: number; body: string }>;
@@ -15,6 +16,7 @@ export type Post = (path: string, body: string) => Promise<{ status: number; bod
 const spoken: Record<string, string> = {
   "vite.templated": "This text holds template code. Edit it in the source.",
   "vite.no-element": "The page is stale here. Reload and try again.",
+  "vite.stale": "The source no longer holds this text here. Reload the page and edit again.",
   "vite.outside-project": "This element does not come from a project .svelte file.",
   "vite.block-content": "Only inline text and styling can be saved here. Block elements were refused.",
 };
@@ -32,6 +34,7 @@ export async function save(claim: Claim, post: Post): Promise<Result<undefined>>
     }
   };
   try {
+    // send it to the vite server endpoint
     const reply = await post(endpoint, JSON.stringify(claim));
     if (reply.status === 200) return { ok: true, value: undefined };
     return { ok: false, error: { kind: "edit.rejected", failure: failure(reply.body), status: reply.status } };
@@ -53,7 +56,7 @@ export function said(error: Fault): string {
 
 if (import.meta.vitest) {
   const { it, expect } = import.meta.vitest;
-  const claim: Claim = { file: "page.svelte", line: 5, column: 0, tag: "p", html: "new" };
+  const claim: Claim = { file: "page.svelte", line: 5, column: 0, tag: "p", html: "new", original: "old" };
   const answer =
     (status: number, body: string): Post =>
     () =>
@@ -76,6 +79,9 @@ if (import.meta.vitest) {
     const blocked = await save(claim, answer(409, '{"kind":"vite.block-content"}'));
     if (!blocked.ok)
       expect(said(blocked.error)).toBe("Only inline text and styling can be saved here. Block elements were refused.");
+    const stale = await save(claim, answer(409, '{"kind":"vite.stale"}'));
+    if (!stale.ok)
+      expect(said(stale.error)).toBe("The source no longer holds this text here. Reload the page and edit again.");
   });
 
   it("tells the user to install the plugin when the reply is not sveltedit's", async () => {

@@ -6,6 +6,7 @@ export type Error =
   | { kind: "vite.no-content" }
   | { kind: "vite.unclosed" }
   | { kind: "vite.templated" }
+  | { kind: "vite.stale" }
   | { kind: "vite.block-content" }
   | { kind: "vite.outside-project"; file: string }
   | { kind: "vite.missing-file"; cause: unknown }

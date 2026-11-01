@@ -5,6 +5,7 @@ export interface Edit {
   column: number;
   tag: string;
   html: string | null;
+  original: string;
 }
 
 const phrasing = new Set([
@@ -88,6 +89,15 @@ export function rewrite(source: string, edit: Edit): Result<string> {
   if (opened === undefined || opened.closed) return { ok: false, error: { kind: "vite.no-content" } };
   const close = contentEnd(opened.after);
   if (close === undefined) return { ok: false, error: { kind: "vite.unclosed" } };
+  const content = source.slice(opened.after, close);
+  if (content.includes("{") || content.includes("}") || /<[A-Z]/.test(content) || content.includes("<svelte:"))
+    return { ok: false, error: { kind: "vite.templated" } };
+  const squash = (text: string): string => text.replaceAll(/[ \t\n\r\f]+/g, " ").replaceAll(/^ | $/g, "");
+  const shown = squash(content.replaceAll(/<[^>]*>/g, ""))
+    .split(/(&#?[a-z0-9]+;)/i)
+    .map((part, index) => (index % 2 === 1 ? "[\\s\\S]{1,2}" : part.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+    .join("");
+  if (!new RegExp(`^${shown}$`).test(squash(edit.original))) return { ok: false, error: { kind: "vite.stale" } };
   if (edit.html === null) {
     const closer = tagEnd(close);
     if (closer === undefined) return { ok: false, error: { kind: "vite.unclosed" } };
@@ -100,9 +110,6 @@ export function rewrite(source: string, edit: Edit): Result<string> {
     }
     return { ok: true, value: source.slice(0, from) + source.slice(to) };
   }
-  const content = source.slice(opened.after, close);
-  if (content.includes("{") || content.includes("}") || /<[A-Z]/.test(content) || content.includes("<svelte:"))
-    return { ok: false, error: { kind: "vite.templated" } };
   let html = edit.html;
   if (phrasing.has(edit.tag)) {
     html = html
@@ -124,6 +131,7 @@ if (import.meta.vitest) {
     column,
     tag,
     html,
+    original: "Old words",
   });
 
   it("replaces the content span of the element at the recorded location", () => {
@@ -138,36 +146,54 @@ if (import.meta.vitest) {
 
   it("handles nesting of the same tag, quoted brackets and self-closing tags", () => {
     const nested = '<span data-x="a>b">one <span>two</span> <span/> three</span>\n';
-    const out = rewrite(nested, { line: 1, column: 0, tag: "span", html: "flat" });
+    const out = rewrite(nested, { line: 1, column: 0, tag: "span", html: "flat", original: "one two three" });
     expect(out).toEqual({ ok: true, value: '<span data-x="a>b">flat</span>\n' });
   });
 
-  it("deletes the whole element, its indentation and its line when html is null", () => {
-    const gone = rewrite(page, { line: 5, column: 0, tag: "p", html: null });
+  it("deletes the whole element, its indentation and its line when html is null, but never template code", () => {
+    const gone = rewrite(page, { line: 5, column: 0, tag: "p", html: null, original: "Old words" });
     expect(gone).toEqual({ ok: true, value: page.replace('<p class="x">\n  Old words\n</p>\n', "") });
-    const inline = rewrite("a <span>b</span> c\n", { line: 1, column: 2, tag: "span", html: null });
+    const inline = rewrite("a <span>b</span> c\n", { line: 1, column: 2, tag: "span", html: null, original: "b" });
     expect(inline).toEqual({ ok: true, value: "a  c\n" });
-    const templated = rewrite("<p>hi {name}</p>\n", { line: 1, column: 0, tag: "p", html: null });
-    expect(templated).toEqual({ ok: true, value: "" });
+    const templated = rewrite("<p>hi {name}</p>\n", { line: 1, column: 0, tag: "p", html: null, original: "hi Ada" });
+    expect(templated).toEqual({ ok: false, error: { kind: "vite.templated" } });
   });
 
   it("flattens contenteditable line divs into breaks inside phrasing elements", () => {
     const typed = "First line<div><br></div><div>Third <b>bold</b> line</div>";
-    const out = rewrite("<p>old</p>\n", { line: 1, column: 0, tag: "p", html: typed });
+    const out = rewrite("<p>old</p>\n", { line: 1, column: 0, tag: "p", html: typed, original: "old" });
     expect(out).toEqual({ ok: true, value: "<p>First line<br><br>Third <b>bold</b> line</p>\n" });
-    const led = rewrite("<p>old</p>\n", { line: 1, column: 0, tag: "p", html: "<div>Only line</div>" });
+    const led = rewrite("<p>old</p>\n", {
+      line: 1,
+      column: 0,
+      tag: "p",
+      html: "<div>Only line</div>",
+      original: "old",
+    });
     expect(led).toEqual({ ok: true, value: "<p>Only line</p>\n" });
   });
 
   it("refuses block elements pasted into a phrasing element and allows them in flow elements", () => {
-    const pasted = rewrite("<p>old</p>\n", { line: 1, column: 0, tag: "p", html: "a<ul><li>b</li></ul>" });
+    const pasted = rewrite("<p>old</p>\n", {
+      line: 1,
+      column: 0,
+      tag: "p",
+      html: "a<ul><li>b</li></ul>",
+      original: "old",
+    });
     expect(pasted).toEqual({ ok: false, error: { kind: "vite.block-content" } });
-    const listed = rewrite("<li>old</li>\n", { line: 1, column: 0, tag: "li", html: "a<div>b</div>" });
+    const listed = rewrite("<li>old</li>\n", {
+      line: 1,
+      column: 0,
+      tag: "li",
+      html: "a<div>b</div>",
+      original: "old",
+    });
     expect(listed).toEqual({ ok: true, value: "<li>a<div>b</div></li>\n" });
   });
 
   it("escapes braces in the new content so Svelte never sees an expression", () => {
-    const out = rewrite("<p>a</p>\n", { line: 1, column: 0, tag: "p", html: "take {this}" });
+    const out = rewrite("<p>a</p>\n", { line: 1, column: 0, tag: "p", html: "take {this}", original: "a" });
     expect(out).toEqual({ ok: true, value: "<p>take &#123;this&#125;</p>\n" });
   });
 
@@ -181,11 +207,35 @@ if (import.meta.vitest) {
     expect(rewrite(page, at("p[", 5, 0))).toEqual({ ok: false, error: { kind: "vite.bad-tag" } });
     expect(rewrite(page, at("p", 99, 0))).toEqual({ ok: false, error: { kind: "vite.bad-location" } });
     expect(rewrite(page, at("h1", 5, 0))).toEqual({ ok: false, error: { kind: "vite.no-element", tag: "h1" } });
-    expect(rewrite("<img src='x'/>\n", { line: 1, column: 0, tag: "img", html: "x" })).toEqual({
+    expect(rewrite("<img src='x'/>\n", { line: 1, column: 0, tag: "img", html: "x", original: "" })).toEqual({
       ok: false,
       error: { kind: "vite.no-content" },
     });
     expect(rewrite("<p>open forever", at("p", 1, 0))).toEqual({ ok: false, error: { kind: "vite.unclosed" } });
-    expect(rewrite("<path d='M0 0'/><p>x</p>", { line: 1, column: 0, tag: "p", html: "y" }).ok).toBe(false);
+    const path = rewrite("<path d='M0 0'/><p>x</p>", { line: 1, column: 0, tag: "p", html: "y", original: "x" });
+    expect(path.ok).toBe(false);
+  });
+
+  it("refuses a location whose element no longer holds the text the user started from", () => {
+    const pair = "<p>First</p>\n<p>Second</p>\n";
+    const stale = { ok: false, error: { kind: "vite.stale" } };
+    expect(rewrite(pair, { line: 2, column: 0, tag: "p", html: "new", original: "First" })).toEqual(stale);
+    expect(rewrite(pair, { line: 2, column: 0, tag: "p", html: null, original: "First" })).toEqual(stale);
+    expect(rewrite(pair, { line: 2, column: 0, tag: "p", html: "new", original: "Second" }).ok).toBe(true);
+  });
+
+  it("matches the page text across entities, tags, line breaks and indentation", () => {
+    const source = "<p>\n\t\tIt&rsquo;s a&nbsp;test\n\t\t<b>now</b> &#123;ok&#125;<br>\n\t</p>\n";
+    const shown = "It’s a test now {ok}";
+    const kept = rewrite(source, { line: 1, column: 0, tag: "p", html: "fresh", original: shown });
+    expect(kept).toEqual({ ok: true, value: "<p>fresh</p>\n" });
+    const wrong = rewrite(source, { line: 1, column: 0, tag: "p", html: "fresh", original: "It is a test now" });
+    expect(wrong.ok).toBe(false);
+  });
+
+  it("keeps a leading or trailing non-breaking space, which the page keeps too", () => {
+    const edged = "<p>\n\t&nbsp;Starts and ends here.&nbsp;\n</p>\n";
+    const kept = rewrite(edged, { line: 1, column: 0, tag: "p", html: "x", original: " Starts and ends here. " });
+    expect(kept.ok).toBe(true);
   });
 }

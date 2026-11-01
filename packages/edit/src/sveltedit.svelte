@@ -8,6 +8,7 @@
   let editing = $state(null);
   let pen = $state({ x: 0, y: 0 });
   let kept = "";
+  let original = "";
 
   const post = async (path, body) => {
     const reply = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body });
@@ -25,26 +26,40 @@
     hovered = next;
   };
 
+  // for each mouse movement
   const track = (event) => {
+    // if editing is off or we are currently editing an element, do nothing
     if (!on || editing !== null) return;
+
+    // get the element under the cursor
     const origin = event.target;
+
+    // if the origin is not an element or is inside a sveltedit-controlled area, do nothing
     if (!(origin instanceof Element) || origin.closest("[data-sveltedit]") !== null) return;
+    
+    // locate the element
     const found = locate(origin);
     if (found === undefined) {
       mark(null);
       return;
     }
+
+    // since we  found it place the pen and the bounding box
     const element = found.element;
     const box = element.getBoundingClientRect();
     pen = { x: box.right - 26, y: box.top + 4 };
     mark(element);
   };
 
+  // when user clicks the pen to begin editing
   const begin = () => {
     if (hovered === null) return;
     editing = hovered;
     kept = editing.innerHTML;
+    // get the orgiinal text to carry with the claim
+    original = editing.textContent ?? "";
     editing.style.outline = "2px solid #4c8dff";
+    // allow editing
     editing.setAttribute("contenteditable", "true");
     editing.focus();
     note = "";
@@ -52,6 +67,7 @@
 
   const end = () => {
     if (editing === null) return;
+    // stop editing
     editing.removeAttribute("contenteditable");
     unmark(editing);
     editing = null;
@@ -70,7 +86,7 @@
     if (found === undefined) return;
     const tag = hovered.tagName.toLowerCase();
     if (!window.confirm(`Delete this <${tag}> and its text from the source?`)) return;
-    const claim = { ...found.loc, tag, html: null };
+    const claim = { ...found.loc, tag, html: null, original: hovered.textContent ?? "" };
     const result = await save(claim, post);
     if (result.ok) {
       note = "Deleted";
@@ -80,6 +96,7 @@
     }
   };
 
+  // store the edited content
   const store = async () => {
     if (editing === null) return;
     const found = locate(editing);
@@ -87,7 +104,8 @@
       note = "This element carries no source location.";
       return;
     }
-    const claim = { ...found.loc, tag: editing.tagName.toLowerCase(), html: editing.innerHTML };
+    const claim = { ...found.loc, tag: editing.tagName.toLowerCase(), html: editing.innerHTML, original };
+    // send the claim to the vite server
     const result = await save(claim, post);
     if (result.ok) {
       note = "Saved";
@@ -113,9 +131,14 @@
     if (event.key === "Escape") cancel();
   };
 
+  // this is the core functionality
   $effect(() => {
+    // we only run this in dev mode
     if (!import.meta.env.DEV) return undefined;
+
+    // track mouse movement to ensure we place the rectangle and pen correctly
     window.addEventListener("mousemove", track);
+    // this is used to handle the Escape key for cancelling edits
     window.addEventListener("keydown", escape);
     return () => {
       window.removeEventListener("mousemove", track);

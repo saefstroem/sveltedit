@@ -1,6 +1,6 @@
 import type { Error } from "./error";
 import type { Result } from "./result";
-import { rewrite } from "./rewrite";
+import { rewrite, type Edit } from "./rewrite";
 
 export interface Io {
   resolve(base: string, file: string): string;
@@ -24,19 +24,22 @@ const codes: Record<Error["kind"], number> = {
   "vite.no-content": 409,
   "vite.unclosed": 409,
   "vite.templated": 409,
+  "vite.stale": 409,
   "vite.block-content": 409,
 };
 
 export function apply(claim: unknown, root: string, io: Io): Reply {
   const reject = (error: Error): Reply => ({ status: codes[error.kind], body: JSON.stringify({ kind: error.kind }) });
-  const shaped = (): { file: string; line: number; column: number; tag: string; html: string | null } | undefined => {
+  const shaped = (): (Edit & { file: string }) | undefined => {
     if (typeof claim !== "object" || claim === null) return undefined;
     if (!("file" in claim) || !("line" in claim) || !("column" in claim) || !("tag" in claim) || !("html" in claim))
       return undefined;
-    const { file, line, column, tag, html } = claim;
+    if (!("original" in claim)) return undefined;
+    const { file, line, column, tag, html, original } = claim;
     if (typeof file !== "string" || typeof line !== "number" || typeof column !== "number") return undefined;
     if (typeof tag !== "string" || (typeof html !== "string" && html !== null)) return undefined;
-    return { file, line, column, tag, html };
+    if (typeof original !== "string") return undefined;
+    return { file, line, column, tag, html, original };
   };
   const edit = shaped();
   if (edit === undefined) return reject({ kind: "vite.bad-request" });
@@ -69,7 +72,7 @@ if (import.meta.vitest) {
       return { ok: true, value: undefined };
     },
   };
-  const claim = { file: "/app/src/page.svelte", line: 1, column: 0, tag: "p", html: "new" };
+  const claim = { file: "/app/src/page.svelte", line: 1, column: 0, tag: "p", html: "new", original: "old" };
 
   it("rewrites the file and answers 200 with the saved path", () => {
     expect(apply(claim, "/app/", io)).toEqual({ status: 200, body: '{"saved":"/app/src/page.svelte"}' });
@@ -104,5 +107,15 @@ if (import.meta.vitest) {
   it("maps a failed write to 500", () => {
     const sealed: Io = { ...io, write: () => ({ ok: false, error: { kind: "vite.unwritable", cause: "disk" } }) };
     expect(apply(claim, "/app/", sealed).status).toBe(500);
+  });
+
+  it("answers 400 without the original text and 409 when the source no longer holds it", () => {
+    const { file, line, column, tag, html } = claim;
+    expect(apply({ file, line, column, tag, html }, "/app/", io).status).toBe(400);
+    expect(apply({ ...claim, original: "other words" }, "/app/", io)).toEqual({
+      status: 409,
+      body: '{"kind":"vite.stale"}',
+    });
+    expect(held.get("/app/src/page.svelte")).toBe("<p>old</p>\n");
   });
 }

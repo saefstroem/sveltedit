@@ -144,7 +144,7 @@ if (import.meta.vitest) {
       holder,
       "POST",
       "/__sveltedit",
-      '{"file":"/app/x.svelte","line":1,"column":0,"tag":"p","html":"new"}',
+      '{"file":"/app/x.svelte","line":1,"column":0,"tag":"p","html":"new","original":"old"}',
     );
     expect(hit.nexted).toBe(false);
     expect(hit.status).toBe(200);
