@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+pnpm install --frozen-lockfile
+pnpm exec prettier --check .
+pnpm -r exec tsc --noEmit
+pnpm exec eslint . --max-warnings 0
+pnpm exec knip
+pnpm check
+pnpm exec vitest run
