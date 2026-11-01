@@ -124,10 +124,12 @@ export function rewrite(file: string, edit: Edit): Result<string> {
   }
   const scoped = source.slice(first.start, last.end);
   const fenced = html
-    .replaceAll(/ class="([^"]*)"/g, (_class: string, names: string) => {
-      const kept = names.split(" ").filter((name) => scoped.includes(name) || !/^(s|svelte)-\w+$/.test(name));
-      return kept.length === 0 ? "" : ` class="${kept.join(" ")}"`;
-    })
+    .replaceAll(/<[a-z][^>"]*(?:"[^"]*"[^>"]*)*>/gi, (tag) =>
+      tag.replace(/ class="([^"]*)"/, (_class: string, names: string) => {
+        const kept = names.split(" ").filter((name) => scoped.includes(name) || !/^(s|svelte)-\w+$/.test(name));
+        return kept.length === 0 ? "" : ` class="${kept.join(" ")}"`;
+      }),
+    )
     .replaceAll("{", "&#123;")
     .replaceAll("}", "&#125;");
   return { ok: true, value: bom + source.slice(0, first.start) + fenced + source.slice(last.end) };
@@ -195,10 +197,15 @@ if (import.meta.vitest) {
   });
 
   it("drops the scoping classes Svelte adds in dev, but keeps class names the source holds", () => {
-    const html = 'new <b class="note s-keep s-JRowtg58WOIO">x</b> <i class="svelte-1abc">y</i>';
+    const html = 'new <b title="a>b" class="note s-keep s-JRowtg58WOIO">x</b> <i class="svelte-1abc">y</i>';
     expect(first('<p>old <b class="note s-keep">x</b></p>\n', "old x", html)).toEqual({
       ok: true,
-      value: '<p>new <b class="note s-keep">x</b> <i>y</i></p>\n',
+      value: '<p>new <b title="a>b" class="note s-keep">x</b> <i>y</i></p>\n',
+    });
+    const typed = 'Use class="svelte-abc" to <b class="s-JRowtg58WOIO">style</b>';
+    expect(first("<p>old</p>\n", "old", typed)).toEqual({
+      ok: true,
+      value: '<p>Use class="svelte-abc" to <b>style</b></p>\n',
     });
   });
 
