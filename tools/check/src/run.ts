@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { createSourceFile, ScriptTarget, type SourceFile } from "typescript";
 import { bans } from "./bans";
 import { closures } from "./closures";
-import { comments } from "./comments";
 import { flat, type Finding } from "./finding";
 import { folders } from "./folders";
 import { imports } from "./imports";
@@ -30,7 +29,7 @@ export async function run(root = process.cwd()): Promise<number> {
       continue;
     }
     const sf: SourceFile = createSourceFile(path, text, ScriptTarget.Latest, true);
-    findings.push(...comments(sf), ...inlineTests(sf), ...imports(sf), ...bans(sf), ...closures(sf), ...lines(sf));
+    findings.push(...inlineTests(sf), ...imports(sf), ...bans(sf), ...closures(sf), ...lines(sf));
   }
   for (const finding of findings) console.error(`${finding.path}:${String(finding.line)} ${finding.message}`);
   return await Promise.resolve(findings.length === 0 ? 0 : 1);
@@ -67,7 +66,7 @@ if (import.meta.vitest) {
     expect(await run(root)).toBe(1);
     const said = spoken.mock.calls.map((call) => String(call[0]));
     spoken.mockRestore();
-    expect(said.some((line) => line.includes("comment (Rule 9)"))).toBe(true);
+    expect(said.some((line) => line.includes("comment"))).toBe(false);
     expect(said.some((line) => line.includes("only TypeScript under src (A.0)"))).toBe(true);
     expect(said.some((line) => line.includes("type assertion (Rule 8)"))).toBe(true);
     expect(said.some((line) => line.includes("without a trailing"))).toBe(true);
