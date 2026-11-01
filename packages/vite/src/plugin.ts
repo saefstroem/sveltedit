@@ -1,6 +1,6 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { resolve, sep } from "node:path";
-import { apply, type Io } from "./apply";
+import { apply, refusal, type HeaderMap, type Io } from "./apply";
 import { endpoint } from "./endpoint";
 import type { Error } from "./error";
 import type { Result } from "./result";
@@ -8,6 +8,7 @@ import type { Result } from "./result";
 interface Request {
   method?: string | undefined;
   url?: string | undefined;
+  headers?: HeaderMap | undefined;
   on?(event: "data" | "end", handle: (chunk?: unknown) => void): unknown;
 }
 
@@ -22,6 +23,8 @@ interface Server {
   middlewares: { use(handle: (request: unknown, response: unknown, next: () => void) => void): unknown };
 }
 
+const limit = 1_048_576;
+
 function attempted<T>(act: () => T, failed: (cause: unknown) => Error): Result<T> {
   try {
     return { ok: true, value: act() };
@@ -32,6 +35,11 @@ function attempted<T>(act: () => T, failed: (cause: unknown) => Error): Result<T
 
 const disk: Io = {
   resolve: (base, file) => resolve(base, file),
+  real: (path) =>
+    attempted(
+      () => realpathSync(path),
+      (cause) => ({ kind: "vite.missing-file", cause }),
+    ),
   read: (file) =>
     attempted(
       () => readFileSync(file, "utf8"),
@@ -56,7 +64,9 @@ export function sveltedit(io: Io = disk): {
     name: "sveltedit",
     apply: "serve" as const,
     configureServer(server: Server): void {
-      const root = resolve(server.config.root) + sep;
+      const lexical = resolve(server.config.root);
+      const canonical = io.real(lexical);
+      const root = (canonical.ok ? canonical.value : lexical) + sep;
       const shapedRequest = (value: unknown): value is Request => typeof value === "object" && value !== null;
       const shapedResponse = (value: unknown): value is Response =>
         typeof value === "object" &&
@@ -76,19 +86,23 @@ export function sveltedit(io: Io = disk): {
           next();
           return;
         }
-        let raw = "";
+        const chunks: Uint8Array[] = [];
+        let size = 0;
         request.on("data", (chunk) => {
-          raw += String(chunk);
+          const bytes = chunk instanceof Uint8Array ? chunk : Buffer.from(String(chunk));
+          size += bytes.length;
+          if (size <= limit) chunks.push(bytes);
         });
         request.on("end", () => {
           const json: { parse(text: string): unknown } = JSON;
           let claim: unknown = undefined;
           try {
-            claim = json.parse(raw);
+            claim = json.parse(Buffer.concat(chunks).toString("utf8"));
           } catch (cause) {
             claim = { cause };
           }
-          const reply = apply(claim, root, io);
+          const reply =
+            size > limit ? refusal({ kind: "vite.too-large" }) : apply(claim, request.headers ?? {}, root, io);
           response.statusCode = reply.status;
           response.setHeader("content-type", "application/json");
           response.end(reply.body);
@@ -101,24 +115,26 @@ export function sveltedit(io: Io = disk): {
 if (import.meta.vitest) {
   const { it, expect } = import.meta.vitest;
   type Handle = (request: Request, response: Response, next: () => void) => void;
-  const io: Io = {
+  const trusted: HeaderMap = { "content-type": "application/json", "sec-fetch-site": "same-origin" };
+  const io = (held: string): Io => ({
     resolve: (base, file) => (file.startsWith("/") ? file : base + file),
-    read: () => ({ ok: true, value: "<p>old</p>\n" }),
+    real: (path) => ({ ok: true, value: path }),
+    read: () => ({ ok: true, value: held }),
     write: () => ({ ok: true, value: undefined }),
-  };
-  const served = (): { handle?: Handle } => {
+  });
+  const served = (given: Io = io("<p>old</p>\n")): { handle?: Handle } => {
     const holder: { handle?: Handle } = {};
-    sveltedit(io).configureServer({
+    sveltedit(given).configureServer({
       config: { root: "/app" },
       middlewares: {
-        use: (given) => {
-          holder.handle = given;
+        use: (use) => {
+          holder.handle = use;
         },
       },
     });
     return holder;
   };
-  const sent = (holder: { handle?: Handle }, method: string, url: string, body: string) => {
+  const sent = (holder: { handle?: Handle }, method: string, url: string, body: string, cut = 4, headers = trusted) => {
     const result = { status: 0, body: "", nexted: false };
     const listeners = new Map<string, (chunk?: unknown) => void>();
     const response: Response = {
@@ -129,23 +145,22 @@ if (import.meta.vitest) {
         result.status = response.statusCode;
       },
     };
-    holder.handle?.({ method, url, on: (event, given) => void listeners.set(event, given) }, response, () => {
+    const request: Request = { method, url, headers, on: (event, given) => void listeners.set(event, given) };
+    holder.handle?.(request, response, () => {
       result.nexted = true;
     });
-    listeners.get("data")?.(body.slice(0, 4));
-    listeners.get("data")?.(body.slice(4));
+    const bytes = Buffer.from(body);
+    listeners.get("data")?.(bytes.subarray(0, cut));
+    listeners.get("data")?.(bytes.subarray(cut));
     listeners.get("end")?.();
     return result;
   };
+  const claim = (original: string, html = "new") =>
+    JSON.stringify({ file: "/app/x.svelte", line: 1, column: 0, tag: "p", html, original });
 
   it("answers the endpoint and hands everything else to the next middleware", () => {
     const holder = served();
-    const hit = sent(
-      holder,
-      "POST",
-      "/__sveltedit",
-      '{"file":"/app/x.svelte","line":1,"column":0,"tag":"p","html":"new","original":"old"}',
-    );
+    const hit = sent(holder, "POST", "/__sveltedit", claim("old"));
     expect(hit.nexted).toBe(false);
     expect(hit.status).toBe(200);
     expect(hit.body).toBe('{"saved":"/app/x.svelte"}');
@@ -157,5 +172,21 @@ if (import.meta.vitest) {
     const hit = sent(served(), "POST", "/__sveltedit", "not json");
     expect(hit.status).toBe(400);
     expect(hit.body).toBe('{"kind":"vite.bad-request"}');
+  });
+
+  it("decodes a character whose bytes arrive in two chunks", () => {
+    const body = claim("olé");
+    const inside = Buffer.from(body).indexOf(Buffer.from("é")) + 1;
+    expect(sent(served(io("<p>olé</p>\n")), "POST", "/__sveltedit", body, inside).status).toBe(200);
+  });
+
+  it("answers 413 for a body over the size limit", () => {
+    const hit = sent(served(), "POST", "/__sveltedit", claim("old", "x".repeat(limit)));
+    expect(hit).toEqual({ status: 413, body: '{"kind":"vite.too-large"}', nexted: false });
+  });
+
+  it("passes the request headers on, so another site is refused", () => {
+    const hit = sent(served(), "POST", "/__sveltedit", claim("old"), 4, { ...trusted, "sec-fetch-site": "cross-site" });
+    expect(hit.status).toBe(403);
   });
 }

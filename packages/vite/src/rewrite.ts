@@ -1,3 +1,4 @@
+import entities from "./entities.json";
 import type { Result } from "./result";
 
 export interface Edit {
@@ -29,18 +30,24 @@ const phrasing = new Set([
   "dt",
 ]);
 const block = /<(div|p|section|article|aside|ul|ol|li|h[1-6]|table|blockquote|pre|form|header|footer|nav|figure)\b/i;
+const named = new Map(Object.entries(entities));
 
 export function rewrite(source: string, edit: Edit): Result<string> {
   const boundary = (at: number): boolean => [">", "/", " ", "\t", "\n", "\r"].includes(source[at] ?? "");
   const tagEnd = (from: number): { after: number; closed: boolean } | undefined => {
     let quote = "";
+    let depth = 0;
     for (let at = from; at < source.length; at += 1) {
       const char = source[at] ?? "";
       if (quote !== "") {
         if (char === quote) quote = "";
-      } else if (char === '"' || char === "'") {
+      } else if (char === '"' || char === "'" || (char === "`" && depth > 0)) {
         quote = char;
-      } else if (char === ">") {
+      } else if (char === "{") {
+        depth += 1;
+      } else if (char === "}") {
+        depth -= 1;
+      } else if (char === ">" && depth === 0) {
         return { after: at + 1, closed: source[at - 1] === "/" };
       }
     }
@@ -90,12 +97,20 @@ export function rewrite(source: string, edit: Edit): Result<string> {
   const close = contentEnd(opened.after);
   if (close === undefined) return { ok: false, error: { kind: "vite.unclosed" } };
   const content = source.slice(opened.after, close);
+  if (content.includes("<!--")) return { ok: false, error: { kind: "vite.commented" } };
   if (content.includes("{") || content.includes("}") || /<[A-Z]/.test(content) || content.includes("<svelte:"))
     return { ok: false, error: { kind: "vite.templated" } };
   const squash = (text: string): string => text.replaceAll(/[ \t\n\r\f]+/g, " ").replaceAll(/^ | $/g, "");
+  const escaped = (text: string): string => text.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const shown = squash(content.replaceAll(/<[^>]*>/g, ""))
     .split(/(&#?[a-z0-9]+;)/i)
-    .map((part, index) => (index % 2 === 1 ? "[\\s\\S]{1,2}" : part.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+    .map((part, index) => {
+      if (index % 2 === 0) return escaped(part);
+      const code = Number(part.slice(2, -1).replace(/^x/i, "0x"));
+      const numeric = Number.isInteger(code) && code <= 0x10ffff ? String.fromCodePoint(code) : undefined;
+      const text = part[1] === "#" ? numeric : named.get(part.slice(1, -1));
+      return text === undefined ? "[\\s\\S]{1,2}" : escaped(text);
+    })
     .join("");
   if (!new RegExp(`^${shown}$`).test(squash(edit.original))) return { ok: false, error: { kind: "vite.stale" } };
   if (edit.html === null) {
@@ -231,6 +246,27 @@ if (import.meta.vitest) {
     expect(kept).toEqual({ ok: true, value: "<p>fresh</p>\n" });
     const wrong = rewrite(source, { line: 1, column: 0, tag: "p", html: "fresh", original: "It is a test now" });
     expect(wrong.ok).toBe(false);
+  });
+
+  it("decodes entities, so an entity no longer stands for any character", () => {
+    const amp = (original: string) => rewrite("<p>&amp;</p>\n", { line: 1, column: 0, tag: "p", html: "y", original });
+    expect(amp("&").ok).toBe(true);
+    expect(amp("X")).toEqual({ ok: false, error: { kind: "vite.stale" } });
+    const numbers = "<p>&#65;&#x42;&#X43;&#99999999;&unknown;</p>\n";
+    expect(rewrite(numbers, { line: 1, column: 0, tag: "p", html: "y", original: "ABC??" }).ok).toBe(true);
+    expect(rewrite(numbers, { line: 1, column: 0, tag: "p", html: "y", original: "ABD??" }).ok).toBe(false);
+  });
+
+  it("refuses content that holds a comment, so a closing tag inside it is never taken", () => {
+    const commented = "<p>old <!-- </p> --></p>\n";
+    const out = rewrite(commented, { line: 1, column: 0, tag: "p", html: "new", original: "old" });
+    expect(out).toEqual({ ok: false, error: { kind: "vite.commented" } });
+  });
+
+  it("finds the end of an opening tag past arrow functions and strings in attributes", () => {
+    const clicked = "<p onclick={() => go(`>`, 1 > 0)}>old</p>\n";
+    const out = rewrite(clicked, { line: 1, column: 0, tag: "p", html: "new", original: "old" });
+    expect(out).toEqual({ ok: true, value: "<p onclick={() => go(`>`, 1 > 0)}>new</p>\n" });
   });
 
   it("keeps a leading or trailing non-breaking space, which the page keeps too", () => {

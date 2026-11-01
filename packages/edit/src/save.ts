@@ -15,6 +15,8 @@ export type Post = (path: string, body: string) => Promise<{ status: number; bod
 
 const spoken: Record<string, string> = {
   "vite.templated": "This text holds template code. Edit it in the source.",
+  "vite.commented": "This text holds an HTML comment. Edit it in the source.",
+  "vite.too-large": "The edit is larger than 1 MB and was refused.",
   "vite.no-element": "The page is stale here. Reload and try again.",
   "vite.stale": "The source no longer holds this text here. Reload the page and edit again.",
   "vite.outside-project": "This element does not come from a project .svelte file.",

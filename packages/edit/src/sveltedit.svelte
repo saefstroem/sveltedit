@@ -99,17 +99,18 @@
   // store the edited content
   const store = async () => {
     if (editing === null) return;
-    const found = locate(editing);
-    if (found === undefined) {
+    const target = editing;
+    const loc = target.__svelte_meta?.loc;
+    if (loc === undefined) {
       note = "This element carries no source location.";
       return;
     }
-    const claim = { ...found.loc, tag: editing.tagName.toLowerCase(), html: editing.innerHTML, original };
+    const claim = { ...loc, tag: target.tagName.toLowerCase(), html: target.innerHTML, original };
     // send the claim to the vite server
     const result = await save(claim, post);
     if (result.ok) {
       note = "Saved";
-      end();
+      if (editing === target) end();
     } else {
       note = said(result.error);
     }

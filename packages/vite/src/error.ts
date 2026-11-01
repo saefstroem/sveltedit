@@ -1,5 +1,9 @@
 export type Error =
   | { kind: "vite.bad-request" }
+  | { kind: "vite.not-json" }
+  | { kind: "vite.cross-site" }
+  | { kind: "vite.too-large" }
+  | { kind: "vite.commented" }
   | { kind: "vite.bad-tag" }
   | { kind: "vite.bad-location" }
   | { kind: "vite.no-element"; tag: string }
