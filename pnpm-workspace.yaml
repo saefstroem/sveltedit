@@ -5,6 +5,7 @@ catalog:
   typescript: 5.9.3
   vitest: 3.2.7
   "@types/node": 26.6.5
+  svelte: 5.57.2
 onlyBuiltDependencies:
   - esbuild
   - unrs-resolver

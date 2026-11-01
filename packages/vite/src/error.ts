@@ -4,11 +4,10 @@ export type Error =
   | { kind: "vite.cross-site" }
   | { kind: "vite.too-large" }
   | { kind: "vite.commented" }
-  | { kind: "vite.bad-tag" }
   | { kind: "vite.bad-location" }
   | { kind: "vite.no-element"; tag: string }
   | { kind: "vite.no-content" }
-  | { kind: "vite.unclosed" }
+  | { kind: "vite.unparsable"; cause: unknown }
   | { kind: "vite.templated" }
   | { kind: "vite.stale" }
   | { kind: "vite.block-content" }

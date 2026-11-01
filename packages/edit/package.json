@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@sveltejs/package": "3.0.1",
-    "svelte": "5.57.2",
+    "svelte": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
