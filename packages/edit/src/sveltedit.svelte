@@ -16,13 +16,12 @@
   };
 
   const unmark = (element) => {
-    element.style.outline = "";
-    if (element.getAttribute("style") === "") element.removeAttribute("style");
+    element.removeAttribute("data-sveltedit-mark");
   };
 
   const mark = (next) => {
     if (hovered !== null && hovered !== next) unmark(hovered);
-    if (next !== null) next.style.outline = "1px dashed #4c8dff";
+    if (next !== null) next.setAttribute("data-sveltedit-mark", "hover");
     hovered = next;
   };
 
@@ -58,7 +57,7 @@
     kept = editing.innerHTML;
     // get the orgiinal text to carry with the claim
     original = editing.textContent ?? "";
-    editing.style.outline = "2px solid #4c8dff";
+    editing.setAttribute("data-sveltedit-mark", "edit");
     // allow editing
     editing.setAttribute("contenteditable", "true");
     editing.focus();
@@ -179,6 +178,12 @@
 {/if}
 
 <style>
+  :global([data-sveltedit-mark="hover"]) {
+    outline: 1px dashed #4c8dff !important;
+  }
+  :global([data-sveltedit-mark="edit"]) {
+    outline: 2px solid #4c8dff !important;
+  }
   .bar {
     position: fixed;
     top: 0;

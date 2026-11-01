@@ -29,10 +29,11 @@ const phrasing = new Set([
   "label",
   "dt",
 ]);
-const block = /<(div|p|section|article|aside|ul|ol|li|h[1-6]|table|blockquote|pre|form|header|footer|nav|figure)\b/i;
+const block =
+  /<(div|p|section|article|aside|ul|ol|li|h[1-6]|table|blockquote|pre|form|header|footer|nav|figure)(?=[\s/>])/i;
 
 export function rewrite(file: string, edit: Edit): Result<string> {
-  const source = file.replace(/^﻿/, "");
+  const source = file.replace(/^\uFEFF/, "");
   const bom = file.slice(0, file.length - source.length);
   const offset = (): number | undefined => {
     let at = 0;
@@ -85,8 +86,9 @@ export function rewrite(file: string, edit: Edit): Result<string> {
   let root: AST.Root;
   try {
     const markup = source.replaceAll(
-      /(<style\b[^>]*>)([\s\S]*?)(<\/style\s*>)/gi,
-      (_style, open: string, css: string, close: string) => open + css.replaceAll(/[^\n]/g, " ") + close,
+      /<!--[\s\S]*?-->|(<(script|style)\b(?:[^>"']|"[^"]*"|'[^']*')*>)([\s\S]*?)(<\/\2\s*>)/gi,
+      (whole: string, open: string | undefined, _tag: string, body: string, close: string) =>
+        open === undefined ? whole : open + body.replaceAll(/[^\n]/g, " ") + close,
     );
     root = parse(markup, { modern: true });
   } catch (cause) {
@@ -114,13 +116,20 @@ export function rewrite(file: string, edit: Edit): Result<string> {
   let html = edit.html;
   if (phrasing.has(edit.tag)) {
     html = html
-      .replaceAll(/<div[^>]*><br\s*\/?><\/div>/gi, "<br>")
+      .replaceAll(/<div(?=[\s/>])[^>]*><br\s*\/?><\/div>/gi, "<br>")
       .replaceAll(/<\/div>/gi, "")
-      .replaceAll(/<div[^>]*>/gi, "<br>")
+      .replaceAll(/<div(?=[\s/>])[^>]*>/gi, "<br>")
       .replace(/^<br>/, "");
     if (block.test(html)) return { ok: false, error: { kind: "vite.block-content" } };
   }
-  const fenced = html.replaceAll("{", "&#123;").replaceAll("}", "&#125;");
+  const scoped = source.slice(first.start, last.end);
+  const fenced = html
+    .replaceAll(/ class="([^"]*)"/g, (_class: string, names: string) => {
+      const kept = names.split(" ").filter((name) => scoped.includes(name) || !/^(s|svelte)-\w+$/.test(name));
+      return kept.length === 0 ? "" : ` class="${kept.join(" ")}"`;
+    })
+    .replaceAll("{", "&#123;")
+    .replaceAll("}", "&#125;");
   return { ok: true, value: bom + source.slice(0, first.start) + fenced + source.slice(last.end) };
 }
 
@@ -185,6 +194,14 @@ if (import.meta.vitest) {
     expect(listed).toEqual({ ok: true, value: "<li>a<div>b</div></li>\n" });
   });
 
+  it("drops the scoping classes Svelte adds in dev, but keeps class names the source holds", () => {
+    const html = 'new <b class="note s-keep s-JRowtg58WOIO">x</b> <i class="svelte-1abc">y</i>';
+    expect(first('<p>old <b class="note s-keep">x</b></p>\n', "old x", html)).toEqual({
+      ok: true,
+      value: '<p>new <b class="note s-keep">x</b> <i>y</i></p>\n',
+    });
+  });
+
   it("escapes braces in the new content so Svelte never sees an expression", () => {
     expect(first("<p>a</p>\n", "a", "take {this}")).toEqual({ ok: true, value: "<p>take &#123;this&#125;</p>\n" });
   });
@@ -218,7 +235,7 @@ if (import.meta.vitest) {
 
   it("matches the page text across entities, tags, quoted brackets, line breaks and indentation", () => {
     const source = "<p>\n\t\tIt&rsquo;s a&nbsp;test\n\t\t<b>now</b> &#123;ok&#125;<br>\n\t</p>\n";
-    expect(first(source, "It’s a test now {ok}", "fresh")).toEqual({ ok: true, value: "<p>fresh</p>\n" });
+    expect(first(source, "It’s a\u00a0test now {ok}", "fresh")).toEqual({ ok: true, value: "<p>fresh</p>\n" });
     expect(first(source, "It is a test now", "fresh")).toEqual(stale);
     expect(first('<p>Hi <span title="a>b">there</span></p>\n', "Hi there").ok).toBe(true);
   });
@@ -246,11 +263,34 @@ if (import.meta.vitest) {
     expect(first(styled, "old")).toEqual({ ok: true, value: styled.replace("old", "new") });
   });
 
+  it("finds style blocks past style text in scripts, comments and generics", () => {
+    const tricky = [
+      '<script lang="ts" generics="T extends Record<string, unknown>">',
+      '  const example = "<style>";',
+      "</script>",
+      "<!-- <style> -->",
+      "<p>old</p>",
+      '<style lang="scss">',
+      "$gap: 4px;",
+      "</style>",
+      "",
+    ].join("\n");
+    const out = rewrite(tricky, { line: 5, column: 0, tag: "p", html: "new", original: "old" });
+    expect(out).toEqual({ ok: true, value: tricky.replace("<p>old", "<p>new") });
+  });
+
+  it("flattens only real div wrappers, so custom elements whose names start with div survive", () => {
+    const icon = "old <div-icon>icon</div-icon>";
+    expect(first("<p>old</p>\n", "old", icon)).toEqual({ ok: true, value: `<p>${icon}</p>\n` });
+  });
+
   it("keeps a byte order mark and the offsets after it", () => {
-    expect(first("﻿<p>old</p>\n", "old")).toEqual({ ok: true, value: "﻿<p>new</p>\n" });
+    expect(first("\uFEFF<p>old</p>\n", "old")).toEqual({ ok: true, value: "\uFEFF<p>new</p>\n" });
   });
 
   it("keeps a leading or trailing non-breaking space, which the page keeps too", () => {
-    expect(first("<p>\n\t&nbsp;Starts and ends here.&nbsp;\n</p>\n", " Starts and ends here. ").ok).toBe(true);
+    expect(first("<p>\n\t&nbsp;Starts and ends here.&nbsp;\n</p>\n", "\u00a0Starts and ends here.\u00a0").ok).toBe(
+      true,
+    );
   });
 }

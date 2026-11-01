@@ -2,7 +2,7 @@ import { isIfStatement, isMetaProperty, isPropertyAccessExpression, type SourceF
 
 export function testStart(sf: SourceFile): number | undefined {
   const last = sf.statements[sf.statements.length - 1];
-  if (last === undefined || !isIfStatement(last)) return undefined;
+  if (last === undefined || !isIfStatement(last) || last.elseStatement !== undefined) return undefined;
   const gate = last.expression;
   if (!isPropertyAccessExpression(gate) || gate.name.text !== "vitest") return undefined;
   if (!isMetaProperty(gate.expression)) return undefined;
@@ -23,5 +23,9 @@ if (import.meta.vitest) {
     expect(testStart(parsed("const a = 1;\n"))).toBe(undefined);
     expect(testStart(parsed("if (import.meta.hot) {\n}\n"))).toBe(undefined);
     expect(testStart(parsed(""))).toBe(undefined);
+  });
+
+  it("refuses a test block with an else branch, which runs outside Vitest", () => {
+    expect(testStart(parsed("if (import.meta.vitest) {\n} else {\n  throw 1;\n}\n"))).toBe(undefined);
   });
 }
