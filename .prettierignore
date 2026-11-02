@@ -1,0 +1,6 @@
+CLAUDE.md
+LICENSE
+package-lock.json
+dist/
+*.svelte
+.svelte-kit/

@@ -1,0 +1,50 @@
+{
+  "name": "sveltedit",
+  "version": "0.1.0",
+  "description": "A dev-mode bar for Svelte 5 sites: hover any text, press the pen, edit it in place, and save it back into the .svelte source.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Saefstroem/sveltedit.git"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "svelte": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "svelte": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./vite": {
+      "types": "./dist/vite/index.d.ts",
+      "default": "./dist/vite/index.js"
+    }
+  },
+  "scripts": {
+    "build": "svelte-package -i src -o dist",
+    "prepublishOnly": "npm run build",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --check .",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  },
+  "devDependencies": {
+    "@sveltejs/package": "3.0.1",
+    "@types/node": "26.6.5",
+    "eslint": "9.39.5",
+    "eslint-import-resolver-typescript": "4.4.5",
+    "eslint-plugin-import-x": "4.17.1",
+    "jiti": "2.7.0",
+    "prettier": "3.9.10",
+    "svelte": "5.57.2",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.0"
+  }
+}
