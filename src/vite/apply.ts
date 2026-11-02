@@ -43,6 +43,7 @@ export function apply(claim: unknown, headers: HeaderMap, root: string, io: Io):
       return undefined;
     const { file, line, column, tag, html } = claim;
     if (typeof file !== "string" || typeof line !== "number" || typeof column !== "number") return undefined;
+    if (!Number.isInteger(line) || line < 1 || !Number.isInteger(column) || column < 0) return undefined;
     if (typeof tag !== "string" || (typeof html !== "string" && html !== null)) return undefined;
     return { file, line, column, tag, html };
   };
@@ -128,6 +129,9 @@ if (import.meta.vitest) {
     expect(apply(undefined, trusted, "/app/", io).status).toBe(400);
     expect(apply({ file: 1 }, trusted, "/app/", io).status).toBe(400);
     expect(apply({ ...claim, line: "5" }, trusted, "/app/", io).status).toBe(400);
+    expect(apply({ ...claim, line: 0 }, trusted, "/app/", io).status).toBe(400);
+    expect(apply({ ...claim, line: 1.5 }, trusted, "/app/", io).status).toBe(400);
+    expect(apply({ ...claim, column: -1 }, trusted, "/app/", io).status).toBe(400);
   });
 
   it("confines writes to .svelte files inside the project root", () => {
