@@ -43,7 +43,7 @@ export function apply(claim: unknown, headers: HeaderMap, root: string, io: Io):
       return undefined;
     const { file, line, column, tag, html } = claim;
     if (typeof file !== "string" || typeof line !== "number" || typeof column !== "number") return undefined;
-    if (typeof tag !== "string" || typeof html !== "string") return undefined;
+    if (typeof tag !== "string" || (typeof html !== "string" && html !== null)) return undefined;
     return { file, line, column, tag, html };
   };
   if (!header("content-type").toLowerCase().startsWith("application/json")) return refusal({ kind: "vite.not-json" });
@@ -128,7 +128,6 @@ if (import.meta.vitest) {
     expect(apply(undefined, trusted, "/app/", io).status).toBe(400);
     expect(apply({ file: 1 }, trusted, "/app/", io).status).toBe(400);
     expect(apply({ ...claim, line: "5" }, trusted, "/app/", io).status).toBe(400);
-    expect(apply({ ...claim, html: null }, trusted, "/app/", io).status).toBe(400);
   });
 
   it("confines writes to .svelte files inside the project root", () => {
@@ -144,6 +143,12 @@ if (import.meta.vitest) {
     expect(apply({ ...claim, file: "/app/node_modules/kit/page.svelte" }, trusted, "/app/", io).status).toBe(403);
     expect(held.get("/elsewhere/page.svelte")).toBe("<p>old</p>\n");
     expect(held.get("/app/node_modules/kit/page.svelte")).toBe("<p>old</p>\n");
+  });
+
+  it("deletes the element when html is null", () => {
+    expect(apply({ ...claim, html: null }, trusted, "/app/", io).status).toBe(200);
+    expect(held.get("/app/src/page.svelte")).toBe("");
+    held.set("/app/src/page.svelte", "<p>old</p>\n");
   });
 
   it("maps missing files to 404 and rewrite refusals to 409", () => {

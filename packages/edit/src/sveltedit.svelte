@@ -76,6 +76,21 @@
     end();
   };
 
+  const erase = async () => {
+    if (hovered === null || editing !== null) return;
+    const found = locate(hovered);
+    if (found === undefined) return;
+    const tag = hovered.tagName.toLowerCase();
+    if (!window.confirm(`Delete this <${tag}> and its text from the source?`)) return;
+    const result = await save({ ...found.loc, tag, html: null }, post);
+    if (result.ok) {
+      note = "Deleted";
+      mark(null);
+    } else {
+      note = said(result.error);
+    }
+  };
+
   // store the edited content
   const store = async () => {
     if (editing === null) return;
@@ -153,6 +168,16 @@
     <button type="button" data-sveltedit class="pen" style="left: {pen.x}px; top: {pen.y}px" onclick={begin} aria-label="Edit this text">
       ✎
     </button>
+    <button
+      type="button"
+      data-sveltedit
+      class="pen bin"
+      style="left: {pen.x - 26}px; top: {pen.y}px"
+      onclick={erase}
+      aria-label="Delete this element"
+    >
+      ✕
+    </button>
   {/if}
 {/if}
 
@@ -189,6 +214,9 @@
     border-radius: 4px;
     padding: 2px 8px;
     cursor: pointer;
+  }
+  .bin {
+    background: #e5484d;
   }
   .pen {
     position: fixed;

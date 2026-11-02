@@ -7,7 +7,7 @@ export interface Claim {
   line: number;
   column: number;
   tag: string;
-  html: string;
+  html: string | null;
 }
 
 export type Post = (path: string, body: string) => Promise<{ status: number; body: string }>;
@@ -83,6 +83,16 @@ if (import.meta.vitest) {
       expect(said(odd.error)).toBe(
         "No sveltedit reply (HTTP 404). Add sveltedit() from sveltedit-vite to vite.config.ts and restart the dev server.",
       );
+  });
+
+  it("sends a deletion as a null html claim", async () => {
+    let sent = "";
+    const post: Post = (path, body) => {
+      sent = path + " " + body;
+      return Promise.resolve({ status: 200, body: '{"saved":"page.svelte"}' });
+    };
+    expect(await save({ ...claim, html: null }, post)).toEqual({ ok: true, value: undefined });
+    expect(sent).toBe(`/__sveltedit ${JSON.stringify({ ...claim, html: null })}`);
   });
 
   it("survives a dead server", async () => {
