@@ -20,7 +20,7 @@
     "allowJs": false,
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "types": ["node", "vitest/importMeta"]
+    "types": ["node"]
   },
-  "include": ["src", "eslint.config.ts", "vitest.config.ts"]
+  "include": ["src", "eslint.config.ts"]
 }

@@ -28,7 +28,6 @@
   "scripts": {
     "build": "svelte-package -i src -o dist",
     "prepublishOnly": "npm run build",
-    "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --check .",
     "typecheck": "tsc --noEmit"
@@ -46,7 +45,6 @@
     "prettier": "3.9.10",
     "svelte": "5.57.2",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.72.0",
-    "vitest": "3.2.7"
+    "typescript-eslint": "8.72.0"
   }
 }

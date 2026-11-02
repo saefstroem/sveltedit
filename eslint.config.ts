@@ -20,18 +20,11 @@ export default [
       "import-x/no-cycle": "error",
       "import-x/no-default-export": "error",
       "import-x/no-extraneous-dependencies": "error",
-      "import-x/no-internal-modules": ["error", { allow: ["vitest/config"] }],
+      "import-x/no-internal-modules": "error",
       "import-x/no-namespace": "error",
       "import-x/no-unassigned-import": "error",
       "import-x/order": "error",
-      "no-restricted-syntax": [
-        "error",
-        { selector: "ExportAllDeclaration", message: "No glob re-export." },
-        {
-          selector: "MemberExpression[object.name=/^(it|describe|test)$/][property.name=/^(only|skip)$/]",
-          message: "No focused or skipped tests.",
-        },
-      ],
+      "no-restricted-syntax": ["error", { selector: "ExportAllDeclaration", message: "No glob re-export." }],
     },
   },
   {

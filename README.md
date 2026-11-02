@@ -37,7 +37,8 @@ Render the bar once, for example in `+layout.svelte`:
 <Sveltedit />
 ```
 
-In SvelteKit, turn off server rendering in dev, for example in `src/routes/+layout.ts`:
+
+Sometimes during server-side changes or code changes, SSR can make the location descriptor of elements corrupted, which makes any kind of editing risking data corruption via sveltedit. Therefore it is recommended to turn off SSR like for example in `src/routes/+layout.ts`:
 
 ```ts
 import { dev } from "$app/environment";
@@ -45,12 +46,9 @@ import { dev } from "$app/environment";
 export const ssr = !dev;
 ```
 
-When Svelte 5 hydrates a server-rendered page, an element after a child component can get the
-location of the next element. Then a save changes the wrong element. Client rendering gives correct
-locations.
 
-The bar renders only when `import.meta.env.DEV` is true, and the middleware runs only in the dev
-server (`apply: "serve"`). A production build contains neither.
+The top editor bar renders only when `import.meta.env.DEV` is true, and the middleware runs only in the dev
+server (`apply: "serve"`).
 
 ## Use
 
@@ -63,7 +61,7 @@ server (`apply: "serve"`). A production build contains neither.
 
 ## How it works
 
-In dev mode, Svelte 5 records the source location of each element on the element itself
+In dev mode, Svelte 5 records the source location of each element on the element itself via
 (`__svelte_meta.loc`). The bar sends this location and the new HTML of the element (`innerHTML`) to
 `POST /__sveltedit` on the Vite dev server. The middleware finds the element at that line and column
 in the `.svelte` file. It replaces all that is between the opening tag and the closing tag with the
@@ -85,17 +83,17 @@ tag.
 - Svelte 5 and Vite only. The location data comes from Svelte 5 dev mode, and the dev-only switch is
   `import.meta.env.DEV`.
 - The middleware does not change an element that contains template code: a `{...}` expression, a
-  block, a component or a `<svelte:...>` element. Edit these in your editor.
-- The bar writes text as you type it. Do not type `{` or `}`, because Svelte reads them as code.
+  block, a component or a `<svelte:...>` element. This might be changed in the future.
 - The middleware finds the closing tag with a plain text search. It does not support an element
-  inside an element with the same tag, or a `>` in an attribute of the edited element. A save can
-  then write broken markup, and Svelte shows an error.
+  inside an element with the same tag, or a `>` in an attribute of the edited element. If you do this, it can
+  write broken markup, which will present itself with a compilation error.
 - A delete of an element inside a block such as `{#each}` removes it for each item.
 - In a component with a `<style>` block, Svelte adds a class such as `s-1a2b3c` to elements in dev.
   When you save an element that contains such elements, this class goes into the source.
 - Saved HTML lands in the source as one line. Run Prettier after a session of edits if you care
   about formatting.
-- Styling uses the browser's `execCommand`, which is deprecated but works in all current browsers.
+- Bold and plain-text paste use the browser's `document.execCommand`. MDN marks it as deprecated, but all
+  current browsers support it.
 
 ## License
 
