@@ -1,9 +1,9 @@
 import { readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { resolve, sep } from "node:path";
-import { apply, refusal, type HeaderMap, type Io } from "./apply";
-import { endpoint } from "./endpoint";
-import type { Error } from "./error";
-import type { Result } from "./result";
+import { endpoint } from "../endpoint.js";
+import { apply, refusal, type HeaderMap, type Io } from "./apply.js";
+import type { Error } from "./error.js";
+import type { Result } from "./result.js";
 
 interface Request {
   method?: string | undefined;

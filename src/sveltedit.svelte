@@ -1,6 +1,6 @@
 <script>
-  import { locate } from "./locate";
-  import { said, save } from "./save";
+  import { locate } from "./locate.js";
+  import { said, save } from "./save.js";
 
   let on = $state(false);
   let note = $state("");

@@ -4,23 +4,23 @@ Allows you to edit .svelte files much more easily without ever touching code. Tu
 
 Use this only as a devDependency to avoid packaging it in your prod builds!
 
-## Packages
+## Entry points
 
-| Package          | What it does                                                      |
+| Import           | What it is                                                        |
 | ---------------- | ----------------------------------------------------------------- |
 | `sveltedit`      | The editor bar.                                                   |
-| `sveltedit-vite` | The dev-server middleware that writes edits into `.svelte` files. |
+| `sveltedit/vite` | The dev-server middleware that writes edits into `.svelte` files. |
 
 ## Install
 
 ```bash
-npm install -D sveltedit sveltedit-vite
+npm install -D sveltedit
 ```
 
 Add the plugin to `vite.config.ts`:
 
 ```ts
-import { sveltedit } from "sveltedit-vite";
+import { sveltedit } from "sveltedit/vite";
 
 export default defineConfig({
   plugins: [sveltekit(), sveltedit()],

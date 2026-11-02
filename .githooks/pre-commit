@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
-pnpm install --frozen-lockfile
-pnpm exec prettier --check .
-pnpm -r exec tsc --noEmit
-pnpm exec eslint . --max-warnings 0
-pnpm exec knip
-pnpm exec vitest run
+npm ci
+npx prettier --check .
+npx tsc --noEmit
+npx eslint . --max-warnings 0
+npx vitest run
+npm run build

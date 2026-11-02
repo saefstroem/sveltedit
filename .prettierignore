@@ -1,6 +1,6 @@
 CLAUDE.md
 LICENSE
-pnpm-lock.yaml
+package-lock.json
 dist/
 *.svelte
 .svelte-kit/

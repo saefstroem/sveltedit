@@ -1,6 +1,6 @@
-import type { Error } from "./error";
-import type { Result } from "./result";
-import { rewrite, type Edit } from "./rewrite";
+import type { Error } from "./error.js";
+import type { Result } from "./result.js";
+import { rewrite, type Edit } from "./rewrite.js";
 
 export interface Io {
   resolve(base: string, file: string): string;

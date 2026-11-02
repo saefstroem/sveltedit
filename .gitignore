@@ -1,6 +1,5 @@
 node_modules/
 dist/
-.pnpm-store/
 *.tsbuildinfo
 .svelte-kit/
 *.md

@@ -1,6 +1,6 @@
-import { endpoint } from "./endpoint";
-import type { Error as Fault } from "./error";
-import type { Result } from "./result";
+import { endpoint } from "./endpoint.js";
+import type { Error as Fault } from "./error.js";
+import type { Result } from "./result.js";
 
 export interface Claim {
   file: string;
@@ -45,7 +45,7 @@ export function said(error: Fault): string {
   switch (error.kind) {
     case "edit.rejected":
       if (error.failure === "unknown")
-        return `No sveltedit reply (HTTP ${String(error.status)}). Add sveltedit() from sveltedit-vite to vite.config.ts and restart the dev server.`;
+        return `No sveltedit reply (HTTP ${String(error.status)}). Add sveltedit() from sveltedit/vite to vite.config.ts and restart the dev server.`;
       return spoken[error.failure] ?? `Rejected: ${error.failure}`;
     case "edit.unreachable":
       return "Could not reach the dev server.";
@@ -81,7 +81,7 @@ if (import.meta.vitest) {
     expect(odd).toEqual({ ok: false, error: { kind: "edit.rejected", failure: "unknown", status: 404 } });
     if (!odd.ok)
       expect(said(odd.error)).toBe(
-        "No sveltedit reply (HTTP 404). Add sveltedit() from sveltedit-vite to vite.config.ts and restart the dev server.",
+        "No sveltedit reply (HTTP 404). Add sveltedit() from sveltedit/vite to vite.config.ts and restart the dev server.",
       );
   });
 

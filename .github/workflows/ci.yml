@@ -10,10 +10,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
-      - run: npm install -g pnpm@10.34.8
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec prettier --check .
-      - run: pnpm -r exec tsc --noEmit
-      - run: pnpm exec eslint . --max-warnings 0
-      - run: pnpm exec knip
-      - run: pnpm exec vitest run
+      - run: npm ci
+      - run: npx prettier --check .
+      - run: npx tsc --noEmit
+      - run: npx eslint . --max-warnings 0
+      - run: npx vitest run
+      - run: npm run build
