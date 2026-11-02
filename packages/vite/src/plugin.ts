@@ -116,15 +116,19 @@ if (import.meta.vitest) {
   const { it, expect } = import.meta.vitest;
   type Handle = (request: Request, response: Response, next: () => void) => void;
   const trusted: HeaderMap = { "content-type": "application/json", "sec-fetch-site": "same-origin" };
-  const io = (held: string): Io => ({
+  const written: string[] = [];
+  const io: Io = {
     resolve: (base, file) => (file.startsWith("/") ? file : base + file),
     real: (path) => ({ ok: true, value: path }),
-    read: () => ({ ok: true, value: held }),
-    write: () => ({ ok: true, value: undefined }),
-  });
-  const served = (given: Io = io("<p>old</p>\n")): { handle?: Handle } => {
+    read: () => ({ ok: true, value: "<p>old</p>\n" }),
+    write: (_file, source) => {
+      written.push(source);
+      return { ok: true, value: undefined };
+    },
+  };
+  const served = (): { handle?: Handle } => {
     const holder: { handle?: Handle } = {};
-    sveltedit(given).configureServer({
+    sveltedit(io).configureServer({
       config: { root: "/app" },
       middlewares: {
         use: (use) => {
@@ -155,12 +159,11 @@ if (import.meta.vitest) {
     listeners.get("end")?.();
     return result;
   };
-  const claim = (original: string, html = "new") =>
-    JSON.stringify({ file: "/app/x.svelte", line: 1, column: 0, tag: "p", html, original });
+  const claim = (html = "new") => JSON.stringify({ file: "/app/x.svelte", line: 1, column: 0, tag: "p", html });
 
   it("answers the endpoint and hands everything else to the next middleware", () => {
     const holder = served();
-    const hit = sent(holder, "POST", "/__sveltedit", claim("old"));
+    const hit = sent(holder, "POST", "/__sveltedit", claim());
     expect(hit.nexted).toBe(false);
     expect(hit.status).toBe(200);
     expect(hit.body).toBe('{"saved":"/app/x.svelte"}');
@@ -177,16 +180,17 @@ if (import.meta.vitest) {
   it("decodes a character whose bytes arrive in two chunks", () => {
     const body = claim("olé");
     const inside = Buffer.from(body).indexOf(Buffer.from("é")) + 1;
-    expect(sent(served(io("<p>olé</p>\n")), "POST", "/__sveltedit", body, inside).status).toBe(200);
+    expect(sent(served(), "POST", "/__sveltedit", body, inside).status).toBe(200);
+    expect(written.at(-1)).toBe("<p>olé</p>\n");
   });
 
   it("answers 413 for a body over the size limit", () => {
-    const hit = sent(served(), "POST", "/__sveltedit", claim("old", "x".repeat(limit)));
+    const hit = sent(served(), "POST", "/__sveltedit", claim("x".repeat(limit)));
     expect(hit).toEqual({ status: 413, body: '{"kind":"vite.too-large"}', nexted: false });
   });
 
   it("passes the request headers on, so another site is refused", () => {
-    const hit = sent(served(), "POST", "/__sveltedit", claim("old"), 4, { ...trusted, "sec-fetch-site": "cross-site" });
+    const hit = sent(served(), "POST", "/__sveltedit", claim(), 4, { ...trusted, "sec-fetch-site": "cross-site" });
     expect(hit.status).toBe(403);
   });
 }

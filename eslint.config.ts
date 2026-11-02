@@ -20,7 +20,7 @@ export default [
       "import-x/no-cycle": "error",
       "import-x/no-default-export": "error",
       "import-x/no-extraneous-dependencies": "error",
-      "import-x/no-internal-modules": ["error", { allow: ["vitest/config", "svelte/compiler"] }],
+      "import-x/no-internal-modules": ["error", { allow: ["vitest/config"] }],
       "import-x/no-namespace": "error",
       "import-x/no-unassigned-import": "error",
       "import-x/order": "error",

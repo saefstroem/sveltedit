@@ -3,14 +3,8 @@ export type Error =
   | { kind: "vite.not-json" }
   | { kind: "vite.cross-site" }
   | { kind: "vite.too-large" }
-  | { kind: "vite.commented" }
-  | { kind: "vite.bad-location" }
   | { kind: "vite.no-element"; tag: string }
-  | { kind: "vite.no-content" }
-  | { kind: "vite.unparsable"; cause: unknown }
   | { kind: "vite.templated" }
-  | { kind: "vite.stale" }
-  | { kind: "vite.block-content" }
   | { kind: "vite.outside-project"; file: string }
   | { kind: "vite.missing-file"; cause: unknown }
   | { kind: "vite.unwritable"; cause: unknown };

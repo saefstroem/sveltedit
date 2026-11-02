@@ -5,8 +5,7 @@
       "project": ["src/**/*.ts"]
     },
     "packages/vite": {
-      "project": ["src/**/*.ts"],
-      "svelte": false
+      "project": ["src/**/*.ts"]
     },
     "packages/edit": {
       "entry": ["src/sveltedit.svelte"],

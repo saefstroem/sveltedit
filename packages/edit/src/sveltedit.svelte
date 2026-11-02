@@ -8,7 +8,6 @@
   let editing = $state(null);
   let pen = $state({ x: 0, y: 0 });
   let kept = "";
-  let original = "";
 
   const post = async (path, body) => {
     const reply = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body });
@@ -55,8 +54,6 @@
     if (hovered === null) return;
     editing = hovered;
     kept = editing.innerHTML;
-    // get the orgiinal text to carry with the claim
-    original = editing.textContent ?? "";
     editing.setAttribute("data-sveltedit-mark", "edit");
     // allow editing
     editing.setAttribute("contenteditable", "true");
@@ -79,22 +76,6 @@
     end();
   };
 
-  const erase = async () => {
-    if (hovered === null || editing !== null) return;
-    const found = locate(hovered);
-    if (found === undefined) return;
-    const tag = hovered.tagName.toLowerCase();
-    if (!window.confirm(`Delete this <${tag}> and its text from the source?`)) return;
-    const claim = { ...found.loc, tag, html: null, original: hovered.textContent ?? "" };
-    const result = await save(claim, post);
-    if (result.ok) {
-      note = "Deleted";
-      mark(null);
-    } else {
-      note = said(result.error);
-    }
-  };
-
   // store the edited content
   const store = async () => {
     if (editing === null) return;
@@ -104,7 +85,7 @@
       note = "This element carries no source location.";
       return;
     }
-    const claim = { ...loc, tag: target.tagName.toLowerCase(), html: target.innerHTML, original };
+    const claim = { ...loc, tag: target.tagName.toLowerCase(), html: target.innerHTML };
     // send the claim to the vite server
     const result = await save(claim, post);
     if (result.ok) {
@@ -115,9 +96,9 @@
     }
   };
 
-  const styled = (event, command) => {
+  const bold = (event) => {
     event.preventDefault();
-    document.execCommand(command);
+    document.execCommand("bold");
   };
 
   const toggle = () => {
@@ -131,6 +112,14 @@
     if (event.key === "Escape") cancel();
   };
 
+  const input = (event) => {
+    if (editing === null || !editing.contains(event.target)) return;
+    if (event.inputType === "insertParagraph") event.preventDefault();
+    if (event.inputType !== "insertFromPaste") return;
+    event.preventDefault();
+    document.execCommand("insertText", false, event.dataTransfer?.getData("text/plain") ?? "");
+  };
+
   // this is the core functionality
   $effect(() => {
     // we only run this in dev mode
@@ -140,9 +129,11 @@
     window.addEventListener("mousemove", track);
     // this is used to handle the Escape key for cancelling edits
     window.addEventListener("keydown", escape);
+    window.addEventListener("beforeinput", input);
     return () => {
       window.removeEventListener("mousemove", track);
       window.removeEventListener("keydown", escape);
+      window.removeEventListener("beforeinput", input);
     };
   });
 </script>
@@ -152,9 +143,7 @@
     <strong>sveltedit</strong>
     <button type="button" onclick={toggle}>{on ? "Editing: on" : "Editing: off"}</button>
     {#if editing !== null}
-      <button type="button" onmousedown={(event) => styled(event, "bold")}>B</button>
-      <button type="button" onmousedown={(event) => styled(event, "italic")}>I</button>
-      <button type="button" onmousedown={(event) => styled(event, "underline")}>U</button>
+      <button type="button" onmousedown={bold}>B</button>
       <button type="button" onclick={store}>Save</button>
       <button type="button" onclick={cancel}>Cancel</button>
     {/if}
@@ -163,16 +152,6 @@
   {#if on && hovered !== null && editing === null}
     <button type="button" data-sveltedit class="pen" style="left: {pen.x}px; top: {pen.y}px" onclick={begin} aria-label="Edit this text">
       ✎
-    </button>
-    <button
-      type="button"
-      data-sveltedit
-      class="pen bin"
-      style="left: {pen.x - 26}px; top: {pen.y}px"
-      onclick={erase}
-      aria-label="Delete this element"
-    >
-      ✕
     </button>
   {/if}
 {/if}
@@ -210,9 +189,6 @@
     border-radius: 4px;
     padding: 2px 8px;
     cursor: pointer;
-  }
-  .bin {
-    background: #e5484d;
   }
   .pen {
     position: fixed;

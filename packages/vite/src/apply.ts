@@ -24,14 +24,8 @@ const codes: Record<Error["kind"], number> = {
   "vite.too-large": 413,
   "vite.not-json": 415,
   "vite.unwritable": 500,
-  "vite.bad-location": 409,
   "vite.no-element": 409,
-  "vite.no-content": 409,
-  "vite.unparsable": 409,
-  "vite.commented": 409,
   "vite.templated": 409,
-  "vite.stale": 409,
-  "vite.block-content": 409,
 };
 
 export function refusal(error: Error): Reply {
@@ -47,12 +41,10 @@ export function apply(claim: unknown, headers: HeaderMap, root: string, io: Io):
     if (typeof claim !== "object" || claim === null) return undefined;
     if (!("file" in claim) || !("line" in claim) || !("column" in claim) || !("tag" in claim) || !("html" in claim))
       return undefined;
-    if (!("original" in claim)) return undefined;
-    const { file, line, column, tag, html, original } = claim;
+    const { file, line, column, tag, html } = claim;
     if (typeof file !== "string" || typeof line !== "number" || typeof column !== "number") return undefined;
-    if (typeof tag !== "string" || (typeof html !== "string" && html !== null)) return undefined;
-    if (typeof original !== "string") return undefined;
-    return { file, line, column, tag, html, original };
+    if (typeof tag !== "string" || typeof html !== "string") return undefined;
+    return { file, line, column, tag, html };
   };
   if (!header("content-type").toLowerCase().startsWith("application/json")) return refusal({ kind: "vite.not-json" });
   const site = header("sec-fetch-site");
@@ -110,7 +102,7 @@ if (import.meta.vitest) {
     origin: "http://localhost:5173",
     host: "localhost:5173",
   };
-  const claim = { file: "/app/src/page.svelte", line: 1, column: 0, tag: "p", html: "new", original: "old" };
+  const claim = { file: "/app/src/page.svelte", line: 1, column: 0, tag: "p", html: "new" };
 
   it("rewrites the file and answers 200 with the saved path", () => {
     expect(apply(claim, trusted, "/app/", io)).toEqual({ status: 200, body: '{"saved":"/app/src/page.svelte"}' });
@@ -136,6 +128,7 @@ if (import.meta.vitest) {
     expect(apply(undefined, trusted, "/app/", io).status).toBe(400);
     expect(apply({ file: 1 }, trusted, "/app/", io).status).toBe(400);
     expect(apply({ ...claim, line: "5" }, trusted, "/app/", io).status).toBe(400);
+    expect(apply({ ...claim, html: null }, trusted, "/app/", io).status).toBe(400);
   });
 
   it("confines writes to .svelte files inside the project root", () => {
@@ -153,12 +146,6 @@ if (import.meta.vitest) {
     expect(held.get("/app/node_modules/kit/page.svelte")).toBe("<p>old</p>\n");
   });
 
-  it("deletes the element when html is null", () => {
-    expect(apply({ ...claim, html: null }, trusted, "/app/", io).status).toBe(200);
-    expect(held.get("/app/src/page.svelte")).toBe("");
-    held.set("/app/src/page.svelte", "<p>old</p>\n");
-  });
-
   it("maps missing files to 404 and rewrite refusals to 409", () => {
     expect(apply({ ...claim, file: "/app/src/gone.svelte" }, trusted, "/app/", io).status).toBe(404);
     expect(apply({ ...claim, tag: "h1" }, trusted, "/app/", io).status).toBe(409);
@@ -168,15 +155,5 @@ if (import.meta.vitest) {
   it("maps a failed write to 500", () => {
     const sealed: Io = { ...io, write: () => ({ ok: false, error: { kind: "vite.unwritable", cause: "disk" } }) };
     expect(apply(claim, trusted, "/app/", sealed).status).toBe(500);
-  });
-
-  it("answers 400 without the original text and 409 when the source no longer holds it", () => {
-    const { file, line, column, tag, html } = claim;
-    expect(apply({ file, line, column, tag, html }, trusted, "/app/", io).status).toBe(400);
-    expect(apply({ ...claim, original: "other words" }, trusted, "/app/", io)).toEqual({
-      status: 409,
-      body: '{"kind":"vite.stale"}',
-    });
-    expect(held.get("/app/src/page.svelte")).toBe("<p>old</p>\n");
   });
 }

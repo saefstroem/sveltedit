@@ -7,21 +7,16 @@ export interface Claim {
   line: number;
   column: number;
   tag: string;
-  html: string | null;
-  original: string;
+  html: string;
 }
 
 export type Post = (path: string, body: string) => Promise<{ status: number; body: string }>;
 
 const spoken: Record<string, string> = {
   "vite.templated": "This text holds template code. Edit it in the source.",
-  "vite.commented": "This text holds an HTML comment. Edit it in the source.",
   "vite.too-large": "The edit is larger than 1 MB and was refused.",
-  "vite.unparsable": "Svelte cannot parse this file now. Fix it in your editor, then save again.",
   "vite.no-element": "The page is stale here. Reload and try again.",
-  "vite.stale": "The source no longer holds this text here. Reload the page and edit again.",
   "vite.outside-project": "This element does not come from a project .svelte file.",
-  "vite.block-content": "Only inline text and styling can be saved here. Block elements were refused.",
 };
 
 export async function save(claim: Claim, post: Post): Promise<Result<undefined>> {
@@ -59,7 +54,7 @@ export function said(error: Fault): string {
 
 if (import.meta.vitest) {
   const { it, expect } = import.meta.vitest;
-  const claim: Claim = { file: "page.svelte", line: 5, column: 0, tag: "p", html: "new", original: "old" };
+  const claim: Claim = { file: "page.svelte", line: 5, column: 0, tag: "p", html: "new" };
   const answer =
     (status: number, body: string): Post =>
     () =>
@@ -79,12 +74,6 @@ if (import.meta.vitest) {
     const out = await save(claim, answer(409, '{"kind":"vite.templated"}'));
     expect(out).toEqual({ ok: false, error: { kind: "edit.rejected", failure: "vite.templated", status: 409 } });
     if (!out.ok) expect(said(out.error)).toBe("This text holds template code. Edit it in the source.");
-    const blocked = await save(claim, answer(409, '{"kind":"vite.block-content"}'));
-    if (!blocked.ok)
-      expect(said(blocked.error)).toBe("Only inline text and styling can be saved here. Block elements were refused.");
-    const stale = await save(claim, answer(409, '{"kind":"vite.stale"}'));
-    if (!stale.ok)
-      expect(said(stale.error)).toBe("The source no longer holds this text here. Reload the page and edit again.");
   });
 
   it("tells the user to install the plugin when the reply is not sveltedit's", async () => {
@@ -94,16 +83,6 @@ if (import.meta.vitest) {
       expect(said(odd.error)).toBe(
         "No sveltedit reply (HTTP 404). Add sveltedit() from sveltedit-vite to vite.config.ts and restart the dev server.",
       );
-  });
-
-  it("sends a deletion as a null html claim", async () => {
-    let sent = "";
-    const post: Post = (path, body) => {
-      sent = path + " " + body;
-      return Promise.resolve({ status: 200, body: '{"saved":"page.svelte"}' });
-    };
-    expect(await save({ ...claim, html: null }, post)).toEqual({ ok: true, value: undefined });
-    expect(sent).toBe(`/__sveltedit ${JSON.stringify({ ...claim, html: null })}`);
   });
 
   it("survives a dead server", async () => {
