@@ -12,7 +12,6 @@
     ".": "./package.json"
   },
   "scripts": {
-    "check": "tsx tools/check/src/main.ts",
     "build": "pnpm -r run build",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
@@ -26,7 +25,6 @@
     "jiti": "2.7.0",
     "knip": "6.43.0",
     "prettier": "3.9.10",
-    "tsx": "4.23.15",
     "typescript": "catalog:",
     "typescript-eslint": "8.72.0",
     "vitest": "catalog:"

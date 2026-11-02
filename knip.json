@@ -1,9 +1,6 @@
 {
   "workspaces": {
     ".": {},
-    "tools/check": {
-      "project": ["src/**/*.ts"]
-    },
     "packages/vite": {
       "project": ["src/**/*.ts"]
     },

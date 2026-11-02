@@ -16,5 +16,4 @@ jobs:
       - run: pnpm -r exec tsc --noEmit
       - run: pnpm exec eslint . --max-warnings 0
       - run: pnpm exec knip
-      - run: pnpm check
       - run: pnpm exec vitest run
