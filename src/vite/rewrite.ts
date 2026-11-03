@@ -5,6 +5,7 @@ export interface Edit {
   column: number;
   tag: string;
   html: string | null;
+  more: string[];
 }
 
 export function rewrite(source: string, edit: Edit): Result<string> {
@@ -21,14 +22,25 @@ export function rewrite(source: string, edit: Edit): Result<string> {
   const close = source.indexOf(`</${edit.tag}>`, open);
   if (open === 0 || close === -1) return missing;
   if (/[{}]|<[A-Z]|<svelte:/.test(source.slice(open, close))) return { ok: false, error: { kind: "vite.templated" } };
-  if (edit.html !== null) {
-    const fenced = edit.html.replaceAll("{", "&#123;").replaceAll("}", "&#125;");
-    return { ok: true, value: source.slice(0, open) + fenced + source.slice(close) };
-  }
+  const fenced = (part: string) => part.replaceAll("{", "&#123;").replaceAll("}", "&#125;");
   let from = start;
   let to = close + edit.tag.length + 3;
   const lineStart = source.lastIndexOf("\n", from - 1) + 1;
-  if (source.slice(lineStart, from).trim() === "" && source[to] === "\n") {
+  const alone = source.slice(lineStart, from).trim() === "";
+  if (edit.html !== null && edit.more.length === 0)
+    return { ok: true, value: source.slice(0, open) + fenced(edit.html) + source.slice(close) };
+  if (edit.html !== null) {
+    const indent = alone ? source.slice(lineStart, from) : "";
+    const opening = source.slice(start, open);
+    const blocks = [edit.html, ...edit.more].map(
+      (part, index) =>
+        (index === 0 ? opening : opening.replace(/\s+id\s*=\s*(?:"[^"]*"|'[^']*'|\{[^}]*\}|[^\s>]+)/, "")) +
+        fenced(part) +
+        `</${edit.tag}>`,
+    );
+    return { ok: true, value: source.slice(0, from) + blocks.join("\n" + indent) + source.slice(to) };
+  }
+  if (alone && source[to] === "\n") {
     from = lineStart;
     to += 1;
   }

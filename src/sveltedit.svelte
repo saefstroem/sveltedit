@@ -8,6 +8,8 @@
   let editing = $state(null);
   let pen = $state({ x: 0, y: 0 });
   let kept = "";
+  // paragraphs created with Enter during this edit, in document order
+  let added = [];
 
   const post = async (path, body) => {
     const reply = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body });
@@ -64,16 +66,40 @@
   const end = () => {
     if (editing === null) return;
     // stop editing
-    editing.removeAttribute("contenteditable");
-    unmark(editing);
+    for (const host of [editing, ...added]) {
+      host.removeAttribute("contenteditable");
+      unmark(host);
+    }
+    added = [];
     editing = null;
     mark(null);
   };
 
   const cancel = () => {
     if (editing === null) return;
+    for (const host of added) host.remove();
     editing.innerHTML = kept;
     end();
+  };
+
+  // split the paragraph at the caret into a new element of the same kind
+  const split = (host) => {
+    const selection = window.getSelection();
+    if (selection === null || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+    const tail = document.createRange();
+    tail.setStart(range.startContainer, range.startOffset);
+    tail.setEnd(host, host.childNodes.length);
+    const next = document.createElement(host.tagName);
+    for (const { name, value } of host.attributes) if (name !== "id") next.setAttribute(name, value);
+    next.append(tail.extractContents());
+    if (next.childNodes.length === 0) next.append(document.createElement("br"));
+    if (host.childNodes.length === 0) host.append(document.createElement("br"));
+    host.after(next);
+    added.splice(host === editing ? 0 : added.indexOf(host) + 1, 0, next);
+    next.focus();
+    selection.collapse(next, 0);
   };
 
   const erase = async () => {
@@ -100,7 +126,8 @@
       note = "This element carries no source location.";
       return;
     }
-    const claim = { ...loc, tag: target.tagName.toLowerCase(), html: target.innerHTML };
+    const [html, ...more] = [target, ...added].map((host) => (host.innerHTML === "<br>" ? "" : host.innerHTML));
+    const claim = { ...loc, tag: target.tagName.toLowerCase(), html, more };
     // send the claim to the vite server
     const result = await save(claim, post);
     if (result.ok) {
@@ -128,8 +155,14 @@
   };
 
   const input = (event) => {
-    if (editing === null || !editing.contains(event.target)) return;
-    if (event.inputType === "insertParagraph") event.preventDefault();
+    if (editing === null) return;
+    const host = [editing, ...added].find((element) => element.contains(event.target));
+    if (host === undefined) return;
+    if (event.inputType === "insertParagraph") {
+      event.preventDefault();
+      split(host);
+      return;
+    }
     if (event.inputType !== "insertFromPaste") return;
     event.preventDefault();
     document.execCommand("insertText", false, event.dataTransfer?.getData("text/plain") ?? "");

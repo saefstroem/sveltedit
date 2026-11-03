@@ -8,6 +8,7 @@ export interface Claim {
   column: number;
   tag: string;
   html: string | null;
+  more?: string[];
 }
 
 export type Post = (path: string, body: string) => Promise<{ status: number; body: string }>;
