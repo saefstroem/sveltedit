@@ -1,6 +1,6 @@
 {
   "name": "sveltedit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A dev-mode bar for Svelte 5 sites: hover any text, press the pen, edit it in place, and save it back into the .svelte source.",
   "license": "MIT",
   "repository": {
