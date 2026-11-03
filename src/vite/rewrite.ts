@@ -33,7 +33,10 @@ export function rewrite(source: string, edit: Edit): Result<string> {
     const indent = alone ? source.slice(lineStart, from) : "";
     const opening = source.slice(start, open);
     const blocks = [edit.html, ...edit.more].map(
-      (part, index) => (index === 0 ? opening : opening.replace(/\s+id="[^"]*"/, "")) + fenced(part) + `</${edit.tag}>`,
+      (part, index) =>
+        (index === 0 ? opening : opening.replace(/\s+id\s*=\s*(?:"[^"]*"|'[^']*'|\{[^}]*\}|[^\s>]+)/, "")) +
+        fenced(part) +
+        `</${edit.tag}>`,
     );
     return { ok: true, value: source.slice(0, from) + blocks.join("\n" + indent) + source.slice(to) };
   }

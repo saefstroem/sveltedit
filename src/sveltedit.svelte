@@ -126,7 +126,7 @@
       note = "This element carries no source location.";
       return;
     }
-    const [html, ...more] = [target, ...added].map((host) => host.innerHTML.replace(/<br>$/, ""));
+    const [html, ...more] = [target, ...added].map((host) => (host.innerHTML === "<br>" ? "" : host.innerHTML));
     const claim = { ...loc, tag: target.tagName.toLowerCase(), html, more };
     // send the claim to the vite server
     const result = await save(claim, post);
