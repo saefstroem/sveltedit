@@ -55,7 +55,9 @@ server (`apply: "serve"`).
 - Press **Editing: off** in the bar to turn editing on.
 - Hover over text. Press the pen to edit the text, or the bin to delete the element.
 - Select text and press **B** to make it bold. Bold is the only style.
-- Enter does nothing. Press Shift+Enter for a line break.
+- Enter starts a new paragraph: a new element of the same kind after the one you edit, which the
+  save writes into the source as well. Shift+Enter inserts a line break. Backspace does not join
+  two paragraphs.
 - Paste puts in plain text only.
 - Press **Save** to write the change. Press **Cancel** or Escape to restore the text.
 

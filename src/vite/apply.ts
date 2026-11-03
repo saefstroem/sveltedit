@@ -42,10 +42,12 @@ export function apply(claim: unknown, headers: HeaderMap, root: string, io: Io):
     if (!("file" in claim) || !("line" in claim) || !("column" in claim) || !("tag" in claim) || !("html" in claim))
       return undefined;
     const { file, line, column, tag, html } = claim;
+    const more = "more" in claim ? claim.more : [];
+    if (!Array.isArray(more) || !more.every((part) => typeof part === "string")) return undefined;
     if (typeof file !== "string" || typeof line !== "number" || typeof column !== "number") return undefined;
     if (!Number.isInteger(line) || line < 1 || !Number.isInteger(column) || column < 0) return undefined;
     if (typeof tag !== "string" || (typeof html !== "string" && html !== null)) return undefined;
-    return { file, line, column, tag, html };
+    return { file, line, column, tag, html, more: more.map(String) };
   };
   if (!header("content-type").toLowerCase().startsWith("application/json")) return refusal({ kind: "vite.not-json" });
   const site = header("sec-fetch-site");
